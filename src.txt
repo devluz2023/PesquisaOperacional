@@ -1,0 +1,1785 @@
+================================================================================
+ARQUIVO: otimizar_aluguel_barcos.py
+================================================================================
+
+"""
+Otimização de Aluguel de Embarcações (Capitão Caverna S.A.)
+Resolução exata e visualização geométrica tridimensional (R³).
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
+from scipy.optimize import linprog
+
+
+def resolver_capitao_caverna():
+    c = [-50.0, -70.0, -100.0]
+    A_ub = [
+        [1.0, 1.0, 1.0],  # Capitães <= 10
+        [1.0, 2.0, 3.0],  # Tripulantes <= 18
+    ]
+    b_ub = [10.0, 18.0]
+    bounds = [(0, 4), (0, 8), (0, 3)]
+    integrality = [1, 1, 1]
+
+    res = linprog(
+        c,
+        A_ub=A_ub,
+        b_ub=b_ub,
+        bounds=bounds,
+        integrality=integrality,
+        method="highs",
+    )
+
+    x1, x2, x3 = [int(round(v)) for v in res.x]
+    return {
+        "x1": x1,
+        "x2": x2,
+        "x3": x3,
+        "lucro": int(round(-res.fun)),
+    }
+
+
+def plotar_espaco_3d(solucao):
+    fig = plt.figure(figsize=(11, 8))
+    ax = fig.add_subplot(111, projection="3d")
+
+    # Malha para os planos de restrição
+    x1_vals = np.linspace(0, 4, 30)
+    x2_vals = np.linspace(0, 8, 30)
+    X1, X2 = np.meshgrid(x1_vals, x2_vals)
+
+    # Plano 1: Capitães (x1 + x2 + x3 = 10  =>  x3 = 10 - x1 - x2)
+    Z_capitaes = 10.0 - X1 - X2
+    Z_capitaes = np.clip(Z_capitaes, 0, 3)
+
+    # Plano 2: Tripulantes (x1 + 2x2 + 3x3 = 18  =>  x3 = (18 - x1 - 2x2)/3)
+    Z_tripulantes = (18.0 - X1 - 2.0 * X2) / 3.0
+    Z_tripulantes = np.clip(Z_tripulantes, 0, 3)
+
+    # Superfícies semitransparentes dos recursos ativos
+    ax.plot_surface(
+        X1,
+        X2,
+        Z_capitaes,
+        alpha=0.25,
+        color="royalblue",
+        label=r"Capitães: $x_1+x_2+x_3 \leq 10$",
+    )
+    ax.plot_surface(
+        X1,
+        X2,
+        Z_tripulantes,
+        alpha=0.30,
+        color="darkorange",
+        label=r"Tripulantes: $x_1+2x_2+3x_3 \leq 18$",
+    )
+
+    # Mapeamento e plotagem de todos os pontos inteiros viáveis
+    pontos_x1, pontos_x2, pontos_x3 = [], [], []
+    for i in range(5):  # 0 a 4
+        for j in range(9):  # 0 a 8
+            for k in range(4):  # 0 a 3
+                if (i + j + k <= 10) and (i + 2 * j + 3 * k <= 18):
+                    pontos_x1.append(i)
+                    pontos_x2.append(j)
+                    pontos_x3.append(k)
+
+    ax.scatter(
+        pontos_x1,
+        pontos_x2,
+        pontos_x3,
+        color="gray",
+        alpha=0.35,
+        s=20,
+        label="Soluções Inteiras Viáveis",
+    )
+
+    # Destaque do ponto ótimo analítico
+    x_opt = solucao["x1"]
+    y_opt = solucao["x2"]
+    z_opt = solucao["x3"]
+    lucro = solucao["lucro"]
+
+    ax.scatter(
+        [x_opt],
+        [y_opt],
+        [z_opt],
+        color="red",
+        s=120,
+        edgecolors="black",
+        linewidth=1.5,
+        label=rf"Ótimo $({x_opt}, {y_opt}, {z_opt})$ [$Z^*={lucro}\text{{ marfins}}]$",
+    )
+
+    # Vetor de direção de lucro (Gradiente de Z = [50, 70, 100])
+    ax.quiver(
+        x_opt - 1.0,
+        y_opt - 1.4,
+        z_opt - 2.0,
+        1.0,
+        1.4,
+        2.0,
+        color="crimson",
+        length=1.5,
+        normalize=True,
+        arrow_length_ratio=0.3,
+        linewidth=2,
+    )
+    ax.text(
+        x_opt - 0.5,
+        y_opt - 1.0,
+        z_opt - 1.0,
+        "Direção de $\\max Z$",
+        color="darkred",
+        fontsize=9,
+        fontweight="bold",
+    )
+
+    # Linhas de projeção do ponto ótimo até os eixos
+    ax.plot([x_opt, x_opt], [y_opt, y_opt], [0, z_opt], "r--", linewidth=1.2)
+    ax.plot([x_opt, x_opt], [0, y_opt], [0, 0], "r--", linewidth=1.2)
+    ax.plot([0, x_opt], [0, 0], [0, 0], "r--", linewidth=1.2)
+
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 8)
+    ax.set_zlim(0, 3)
+
+    ax.set_xlabel(r"Jangadas ($x_1$)", fontsize=11, labelpad=8)
+    ax.set_ylabel(r"Supercanoas ($x_2$)", fontsize=11, labelpad=8)
+    ax.set_zlabel(r"Arcas ($x_3$)", fontsize=11, labelpad=8)
+    ax.set_title(
+        "Espaço Tridimensional de Soluções — Capitão Caverna S.A.\n"
+        r"$\max Z = 50x_1 + 70x_2 + 100x_3$",
+        fontsize=13,
+        pad=15,
+    )
+
+    ax.view_init(elev=22, azim=130)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    sol = resolver_capitao_caverna()
+    print("=" * 48)
+    print("      RESULTADO ANALÍTICO ÓTIMO (EMBARCAÇÕES)   ")
+    print("=" * 48)
+    print(f"Jangadas     (x1*) : {sol['x1']} barcos")
+    print(f"Supercanoas  (x2*) : {sol['x2']} barcos")
+    print(f"Arcas        (x3*) : {sol['x3']} barcos")
+    print(f"Lucro Máximo (Z*)  : {sol['lucro']} marfins")
+    print("=" * 48)
+
+    plotar_espaco_3d(sol)
+
+================================================================================
+ARQUIVO: otimizar_malharia.py
+================================================================================
+
+"""
+Otimização da Produção de Camisas (Pequena Malharia)
+Resolução exata via SciPy (HiGHS) e plotagem gráfica da região viável.
+
+Problema:
+    Max Z = 2*x1 + 3*x2
+    sujeito a:
+        3.0*x1 + 3.0*x2 <= 210   (Corte)
+        1.5*x1 + 3.0*x2 <= 180   (Costura)
+        5.0*x1 + 3.0*x2 <= 330   (Acabamento)
+        x1, x2 >= 0
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.optimize import linprog
+
+
+def resolver_malharia():
+    # linprog minimiza: Max Z <=> Min -Z
+    c = [-2.0, -3.0]
+
+    A_ub = [
+        [3.0, 3.0],  # Corte
+        [1.5, 3.0],  # Costura
+        [5.0, 3.0],  # Acabamento
+    ]
+    b_ub = [210.0, 180.0, 330.0]
+
+    bounds = [(0.0, None), (0.0, None)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    if not res.success:
+        raise RuntimeError(f"Erro na resolução: {res.message}")
+
+    return {
+        "manga_curta": float(res.x[0]),
+        "manga_comprida": float(res.x[1]),
+        "lucro_max": float(-res.fun),
+        "folga_corte": float(res.slack[0]),
+        "folga_costura": float(res.slack[1]),
+        "folga_acabamento": float(res.slack[2]),
+    }
+
+
+def plotar_grafico(solucao):
+    x1_opt = solucao["manga_curta"]
+    x2_opt = solucao["manga_comprida"]
+    z_opt = solucao["lucro_max"]
+
+    # Malha de pontos
+    x1_vals = np.linspace(0, 85, 1000)
+    x2_vals = np.linspace(0, 75, 1000)
+    X1, X2 = np.meshgrid(x1_vals, x2_vals)
+
+    # Fronteiras isolando x2:
+    # Corte: 3x1 + 3x2 = 210 => x2 = 70 - x1
+    r_corte = 70.0 - x1_vals
+
+    # Costura: 1.5x1 + 3x2 = 180 => x2 = (180 - 1.5x1)/3 = 60 - 0.5x1
+    r_costura = (180.0 - 1.5 * x1_vals) / 3.0
+
+    # Acabamento: 5x1 + 3x2 = 330 => x2 = (330 - 5x1)/3 = 110 - (5/3)x1
+    r_acabamento = (330.0 - 5.0 * x1_vals) / 3.0
+
+    fig, ax = plt.subplots(figsize=(11, 7.5))
+
+    # Retas de restrição
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_corte),
+        label=r"Corte: $3x_1 + 3x_2 \leq 210$ (Ativa)",
+        color="royalblue",
+        linewidth=2.2,
+    )
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_costura),
+        label=r"Costura: $1{,}5x_1 + 3x_2 \leq 180$ (Ativa)",
+        color="darkorange",
+        linewidth=2.2,
+    )
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_acabamento),
+        label=r"Acabamento: $5x_1 + 3x_2 \leq 330$ (Folga: 80h)",
+        color="forestgreen",
+        linewidth=2,
+    )
+
+    # Região factível
+    regiao_factivel = (
+        (3.0 * X1 + 3.0 * X2 <= 210.0)
+        & (1.5 * X1 + 3.0 * X2 <= 180.0)
+        & (5.0 * X1 + 3.0 * X2 <= 330.0)
+        & (X1 >= 0)
+        & (X2 >= 0)
+    )
+
+    ax.imshow(
+        regiao_factivel.astype(int),
+        extent=(0, 85, 0, 75),
+        origin="lower",
+        cmap="Greens",
+        alpha=0.25,
+    )
+
+    # Retas da Função-Objetivo (Isolucro: 2x1 + 3x2 = Z => x2 = - (2/3)x1 + Z/3)
+    z_sub = 140.0
+    ax.plot(
+        x1_vals,
+        -(2.0 / 3.0) * x1_vals + z_sub / 3.0,
+        color="crimson",
+        linestyle=":",
+        alpha=0.6,
+        label=rf"F.O. Sub-ótima ($Z = \text{{R\$\,}}{z_sub:.0f}$)",
+    )
+    ax.plot(
+        x1_vals,
+        -(2.0 / 3.0) * x1_vals + z_opt / 3.0,
+        color="crimson",
+        linewidth=2.5,
+        label=rf"F.O. Ótima ($Z^* = \text{{R\$\,}}{z_opt:.0f}$)",
+    )
+
+    # Vértices (Pontos Extremos)
+    pontos_extremos = {
+        r"$V_1(0;\, 0)$": (0, 0),
+        r"$V_2(0;\, 60)$": (0, 60),
+        r"$V_4(60;\, 10)$": (60, 10),
+        r"$V_5(66;\, 0)$": (66, 0),
+    }
+
+    for rotulo, (vx, vy) in pontos_extremos.items():
+        z_v = 2 * vx + 3 * vy
+        ax.plot(vx, vy, "ko", markersize=5)
+        ax.annotate(
+            f"{rotulo}\n[Z = R$ {z_v:.0f}]",
+            (vx, vy),
+            textcoords="offset points",
+            xytext=(8, 5),
+            fontsize=9,
+        )
+
+    # Destaque do Ponto Ótimo
+    ax.plot(
+        x1_opt,
+        x2_opt,
+        "ro",
+        markersize=10,
+        label=rf"Ótimo $V_3({x1_opt:.0f};\, {x2_opt:.0f})$ [$Z^*=\text{{R\$\,}}{z_opt:.0f}$]",
+    )
+    ax.annotate(
+        f"$V_3(20;\, 50)$ - ÓTIMO\n[Z* = R$ {z_opt:.0f}]",
+        (x1_opt, x2_opt),
+        textcoords="offset points",
+        xytext=(10, 10),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    # Vetor indicando a direção do gradiente da função-objetivo
+    ax.annotate(
+        "Sentido de Maximização (Crescimento de Z)",
+        xy=(x1_opt, x2_opt),
+        xytext=(x1_opt + 10, x2_opt + 12),
+        arrowprops=dict(
+            facecolor="crimson", shrink=0.08, width=1.5, headwidth=8
+        ),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    ax.set_xlim(0, 80)
+    ax.set_ylim(0, 72)
+    ax.set_xlabel(r"Camisas Manga Curta ($x_1$)", fontsize=12)
+    ax.set_ylabel(r"Camisas Manga Comprida ($x_2$)", fontsize=12)
+    ax.set_title(
+        r"Pequena Malharia — Maximização do Lucro ($\max Z = 2x_1 + 3x_2$)",
+        fontsize=13,
+        pad=15,
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right", framealpha=0.92, fontsize=9)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    sol = resolver_malharia()
+    print("=" * 52)
+    print("      PEQUENA MALHARIA — PLANO SEMANAL ÓTIMO        ")
+    print("=" * 52)
+    print(f"Camisas Manga Curta   (x1*) : {sol['manga_curta']:.0f} unidades")
+    print(f"Camisas Manga Comprida(x2*) : {sol['manga_comprida']:.0f} unidades")
+    print("-" * 52)
+    print(f"Lucro Máximo Semanal  (Z*)  : R$ {sol['lucro_max']:,.2f}")
+    print("=" * 52)
+    print("               DIAGNÓSTICO DE RECURSOS              ")
+    print("-" * 52)
+    print(f"Folga no Corte              : {sol['folga_corte']:.1f} h (Esgotado)")
+    print(f"Folga na Costura            : {sol['folga_costura']:.1f} h (Esgotado)")
+    print(f"Folga no Acabamento         : {sol['folga_acabamento']:.1f} h (Sobra)")
+    print("=" * 52)
+
+    plotar_grafico(sol)
+
+================================================================================
+ARQUIVO: pizzaria_linear_graph.py
+================================================================================
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.optimize import linprog
+
+
+def resolver_pizzaria():
+    """Problema da Pizzaria:
+
+    Max Z = 18*x1 + 22*x2  <=>  Min -18*x1 - 22*x2
+    sujeito a:
+        (1/16)*x1 + (1/9)*x2 <= 24   (Tempo: 3 pizzaiolos * 8h)
+        40*x1 + 60*x2 <= 5000        (Queijo: 5 kg = 5000g)
+        x1, x2 >= 0
+    """
+    # Max Z <=> Min (-Z)
+    c = [-18.0, -22.0]
+
+    # Matriz A_ub @ x <= b_ub
+    A_ub = [
+        [1.0 / 16.0, 1.0 / 9.0],  # Mão de obra em horas
+        [40.0, 60.0],  # Gramas de queijo
+    ]
+    b_ub = [24.0, 5000.0]
+
+    bounds = [(0.0, None), (0.0, None)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    if not res.success:
+        raise RuntimeError(f"Falha na convergência: {res.message}")
+
+    return {
+        "x1": float(res.x[0]),
+        "x2": float(res.x[1]),
+        "receita_max": float(-res.fun),
+    }
+
+
+def plotar_grafico(solucao):
+    x1_opt = solucao["x1"]
+    x2_opt = solucao["x2"]
+    z_opt = solucao["receita_max"]
+
+    # Malha de coordenadas para o plano cartesiano
+    x1_vals = np.linspace(0, 420, 1000)
+    x2_vals = np.linspace(0, 240, 1000)
+    X1, X2 = np.meshgrid(x1_vals, x2_vals)
+
+    # Fronteiras das restrições isolando x2:
+    # 1. Mão de obra: (1/16)x1 + (1/9)x2 = 24  =>  x2 = 9 * (24 - x1/16) = 216 - 0.5625*x1
+    r_tempo = 9.0 * (24.0 - x1_vals / 16.0)
+
+    # 2. Queijo: 40x1 + 60x2 = 5000  =>  x2 = (5000 - 40x1) / 60 = 250/3 - (2/3)x1
+    r_queijo = (5000.0 - 40.0 * x1_vals) / 60.0
+
+    fig, ax = plt.subplots(figsize=(11, 7))
+
+    # Plot das linhas de restrição
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_tempo),
+        label=r"Mão de Obra: $\frac{x_1}{16} + \frac{x_2}{9} \leq 24$ (Redundante)",
+        color="gray",
+        linestyle="--",
+        linewidth=1.8,
+    )
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_queijo),
+        label=r"Queijo: $40x_1 + 60x_2 \leq 5.000$ (Ativa)",
+        color="royalblue",
+        linewidth=2.2,
+    )
+
+    # Região factível (delimitada apenas pelo queijo e primeiro quadrante)
+    feasible_region = (
+        (X1 / 16.0 + X2 / 9.0 <= 24.0)
+        & (40.0 * X1 + 60.0 * X2 <= 5000.0)
+        & (X1 >= 0)
+        & (X2 >= 0)
+    )
+
+    ax.imshow(
+        feasible_region.astype(int),
+        extent=(0, 420, 0, 240),
+        origin="lower",
+        cmap="Greens",
+        alpha=0.25,
+    )
+
+    # Retas da Função-Objetivo (Isolucro): 18*x1 + 22*x2 = Z  =>  x2 = -(18/22)*x1 + Z/22
+    # 1. Reta intermediária (Z menor)
+    z_inter = 1200.0
+    ax.plot(
+        x1_vals,
+        -(18.0 / 22.0) * x1_vals + z_inter / 22.0,
+        color="crimson",
+        linestyle=":",
+        alpha=0.6,
+        label=f"F.O. $Z = \\text{{R\\$\\,}}{z_inter:.0f}$",
+    )
+
+    # 2. Reta no vértice V3 (0, 83.33)
+    z_v3 = 22.0 * (250.0 / 3.0)
+    ax.plot(
+        x1_vals,
+        -(18.0 / 22.0) * x1_vals + z_v3 / 22.0,
+        color="crimson",
+        linestyle="--",
+        alpha=0.6,
+        label=f"F.O. $Z = \\text{{R\\$\\,}}{z_v3:.2f}$ (Vértice Calzones)",
+    )
+
+    # 3. Reta no ponto ótimo (último ponto de contato antes de sair da região viável)
+    ax.plot(
+        x1_vals,
+        -(18.0 / 22.0) * x1_vals + z_opt / 22.0,
+        color="crimson",
+        linewidth=2.5,
+        label=rf"F.O. Ótima $Z^* = \text{{R\$\,}}{z_opt:.2f}$",
+    )
+
+    # Vértices da região viável
+    ax.plot(0.0, 0.0, "ko", markersize=5)
+    ax.plot(
+        0.0,
+        250.0 / 3.0,
+        "ko",
+        markersize=6,
+        label=r"Vértice $(0;\, 83{,}33)$",
+    )
+
+    # Ponto ótimo destacado
+    ax.plot(
+        x1_opt,
+        x2_opt,
+        "ro",
+        markersize=9,
+        label=rf"Ótimo $({x1_opt:.0f};\, {x2_opt:.0f})$",
+    )
+
+    # Seta indicando o deslocamento para maximização
+    ax.annotate(
+        "Sentido de Maximização (Crescimento de Z)",
+        xy=(130, 20),
+        xytext=(180, 80),
+        arrowprops=dict(
+            facecolor="crimson", shrink=0.08, width=1.5, headwidth=8
+        ),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    ax.set_xlim(0, 400)
+    ax.set_ylim(0, 230)
+    ax.set_xlabel(r"Quantidade de Pizzas ($x_1$)", fontsize=12)
+    ax.set_ylabel(r"Quantidade de Calzones ($x_2$)", fontsize=12)
+    ax.set_title(
+        r"Otimização da Pizzaria: $\max Z = 18x_1 + 22x_2$",
+        fontsize=14,
+        pad=15,
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right", framealpha=0.9, fontsize=9)
+
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    resultado = resolver_pizzaria()
+    print("=" * 45)
+    print("        RESULTADO DA OTIMIZAÇÃO (PIZZARIA)   ")
+    print("=" * 45)
+    print(f"Pizzas a produzir/vender (x1*)   : {resultado['x1']:.0f} unidades")
+    print(f"Calzones a produzir/vender (x2*) : {resultado['x2']:.0f} unidades")
+    print(f"Receita Máxima Diária (Z*)       : R$ {resultado['receita_max']:,.2f}")
+    print("=" * 45)
+
+    plotar_grafico(resultado)
+
+================================================================================
+ARQUIVO: esportes_radicais_graph.py
+================================================================================
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.optimize import linprog
+
+
+def resolver_esportes_radicais():
+    # Max Z = 60*x1 + 40*x2  <=>  Min -60*x1 - 40*x2
+    c = [-60.0, -40.0]
+
+    # Matriz das restrições (A_ub @ x <= b_ub)
+    A_ub = [
+        [10.0, 10.0],  # Linha 1: 10*x1 + 10*x2 <= 100
+        [3.0, 7.0],  # Linha 2:  3*x1 +  7*x2 <= 42
+    ]
+    b_ub = [100.0, 42.0]
+
+    bounds = [(0.0, None), (0.0, None)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    return {
+        "x1": float(res.x[0]),
+        "x2": float(res.x[1]),
+        "lucro_max": float(-res.fun),
+    }
+
+
+def plotar_grafico(solucao):
+    x1_opt = solucao["x1"]
+    x2_opt = solucao["x2"]
+    z_opt = solucao["lucro_max"]
+
+    x1_vals = np.linspace(0, 16, 800)
+    x2_vals = np.linspace(0, 12, 800)
+    X1, X2 = np.meshgrid(x1_vals, x2_vals)
+
+    # Fronteiras isolando x2:
+    # Linha 1: 10x1 + 10x2 = 100 => x2 = 10 - x1
+    r_linha1 = 10.0 - x1_vals
+    # Linha 2: 3x1 + 7x2 = 42    => x2 = (42 - 3x1)/7
+    r_linha2 = (42.0 - 3.0 * x1_vals) / 7.0
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_linha1),
+        label=r"Linha 1: $10x_1 + 10x_2 \leq 100$",
+        color="royalblue",
+        linewidth=2,
+    )
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_linha2),
+        label=r"Linha 2: $3x_1 + 7x_2 \leq 42$",
+        color="darkorange",
+        linewidth=2,
+    )
+
+    # Região factível
+    factivel = (
+        (10.0 * X1 + 10.0 * X2 <= 100.0)
+        & (3.0 * X1 + 7.0 * X2 <= 42.0)
+        & (X1 >= 0)
+        & (X2 >= 0)
+    )
+
+    ax.imshow(
+        factivel.astype(int),
+        extent=(0, 16, 0, 12),
+        origin="lower",
+        cmap="Blues",
+        alpha=0.25,
+    )
+
+    # Retas de Isolucro: 60x1 + 40x2 = Z => x2 = -1.5*x1 + Z/40
+    ax.plot(
+        x1_vals,
+        -1.5 * x1_vals + 300.0 / 40.0,
+        "crimson",
+        linestyle=":",
+        alpha=0.6,
+        label=r"F.O. $Z = \text{R\$\,300}$",
+    )
+    ax.plot(
+        x1_vals,
+        -1.5 * x1_vals + 540.0 / 40.0,
+        "crimson",
+        linestyle="--",
+        alpha=0.6,
+        label=r"F.O. $Z = \text{R\$\,540}$ (Interseção)",
+    )
+    ax.plot(
+        x1_vals,
+        -1.5 * x1_vals + z_opt / 40.0,
+        "crimson",
+        linewidth=2.5,
+        label=rf"F.O. Ótima $Z^* = \text{{R\$\,}}{z_opt:.0f}$",
+    )
+
+    # Vértices da região factível
+    ax.plot(0, 0, "ko", markersize=5)
+    ax.plot(0, 6, "ko", markersize=6, label=r"$(0;\, 6)$ [$Z=240$]")
+    ax.plot(7, 3, "ko", markersize=6, label=r"$(7;\, 3)$ [$Z=540$]")
+
+    # Ponto ótimo
+    ax.plot(
+        x1_opt,
+        x2_opt,
+        "ro",
+        markersize=9,
+        label=rf"Ótimo $({x1_opt:.0f};\, {x2_opt:.0f})$ [$Z^*={z_opt:.0f}$]",
+    )
+
+    # Vetor gradiente (direção de crescimento de Z)
+    ax.annotate(
+        "Sentido de Crescimento de Z",
+        xy=(10, 0),
+        xytext=(11, 4),
+        arrowprops=dict(
+            facecolor="crimson", shrink=0.08, width=1.5, headwidth=8
+        ),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    ax.set_xlim(0, 15)
+    ax.set_ylim(0, 11)
+    ax.set_xlabel(r"Paraquedas ($x_1$)", fontsize=12)
+    ax.set_ylabel(r"Asas-delta ($x_2$)", fontsize=12)
+    ax.set_title(
+        "Esportes Radicais S.A. — Maximização de Lucro", fontsize=14, pad=15
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right", framealpha=0.9, fontsize=9)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    sol = resolver_esportes_radicais()
+    print("=" * 45)
+    print("   ESPORTES RADICAIS S.A. — OTIMIZAÇÃO   ")
+    print("=" * 45)
+    print(f"Paraquedas a produzir (x1*) : {sol['x1']:.0f} unidades/semana")
+    print(f"Asas-delta a produzir (x2*) : {sol['x2']:.0f} unidades/semana")
+    print(f"Lucro Máximo Semanal (Z*)   : R$ {sol['lucro_max']:,.2f}")
+    print("=" * 45)
+
+    plotar_grafico(sol)
+
+================================================================================
+ARQUIVO: _init__.py
+================================================================================
+
+
+
+================================================================================
+ARQUIVO: otimizador_pele_mimosa.py
+================================================================================
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+def plotar_grafico_pele_mimosa():
+    # Malha de pontos para o plano cartesiano
+    x1 = np.linspace(0, 200, 1000)  # Malas
+    x2 = np.linspace(0, 220, 1000)  # Mochilas
+    X1, X2 = np.meshgrid(x1, x2)
+
+    # Fronteiras das restrições isolando x2:
+    # 1. Corte: x1 <= 150
+    # 2. Tingimento: x2 <= 180
+    # 3. Costura: 2x1 + 2x2 <= 440  =>  x2 = 220 - x1
+    r_costura = 220.0 - x1
+    # 4. Embalagem: 1.2x1 + 1.5x2 <= 300  =>  x2 = (300 - 1.2*x1)/1.5 = 200 - 0.8*x1
+    r_embalagem = (300.0 - 1.2 * x1) / 1.5
+
+    fig, ax = plt.subplots(figsize=(11, 7.5))
+
+    # Plot das fronteiras
+    ax.axvline(
+        150,
+        color="royalblue",
+        linewidth=2.2,
+        label=r"Corte: $x_1 \leq 150$ (Ativa)",
+    )
+    ax.axhline(
+        180,
+        color="darkorange",
+        linestyle="--",
+        linewidth=1.8,
+        label=r"Tingimento: $x_2 \leq 180$ (Redundante)",
+    )
+    ax.plot(
+        x1,
+        np.maximum(0, r_costura),
+        color="forestgreen",
+        linewidth=2.2,
+        label=r"Costura: $x_1 + x_2 \leq 220$ (Ativa)",
+    )
+    ax.plot(
+        x1,
+        np.maximum(0, r_embalagem),
+        color="purple",
+        linestyle="-.",
+        linewidth=1.8,
+        label=r"Embalagem: $1{,}2x_1 + 1{,}5x_2 \leq 300$",
+    )
+
+    # Região factível conjunta (primeiro quadrante)
+    regiao_factivel = (
+        (X1 <= 150.0)
+        & (X2 <= 180.0)
+        & (X1 + X2 <= 220.0)
+        & (1.2 * X1 + 1.5 * X2 <= 300.0)
+        & (X1 >= 0)
+        & (X2 >= 0)
+    )
+
+    ax.imshow(
+        regiao_factivel.astype(int),
+        extent=(0, 200, 0, 220),
+        origin="lower",
+        cmap="Greens",
+        alpha=0.25,
+    )
+
+    # Retas da Função-Objetivo (Isolucro: 50*x1 + 40*x2 = Z => x2 = -1.25*x1 + Z/40)
+    # 1. Reta da produção atual: Z = R$ 7.200 (120 malas e 30 mochilas)
+    z_atual = 50.0 * 120.0 + 40.0 * 30.0  # 7.200
+    ax.plot(
+        x1,
+        -1.25 * x1 + z_atual / 40.0,
+        color="gray",
+        linestyle=":",
+        linewidth=2,
+        label=rf"F.O. Produção Atual ($Z = \text{{R\$\,}}{z_atual:,.0f}$)",
+    )
+
+    # 2. Reta da produção ótima: Z* = R$ 10.300 (150 malas e 70 mochilas)
+    z_opt = 50.0 * 150.0 + 40.0 * 70.0  # 10.300
+    ax.plot(
+        x1,
+        -1.25 * x1 + z_opt / 40.0,
+        color="crimson",
+        linewidth=2.5,
+        label=rf"F.O. Ótima ($Z^* = \text{{R\$\,}}{z_opt:,.0f}$)",
+    )
+
+    # Vértices da região factível
+    vertices = {
+        r"$V_1(0;\, 0)$": (0, 0),
+        r"$V_2(0;\, 180)$": (0, 180),
+        r"$V_3(40;\, 180)$": (40, 180),
+        r"$V_5(150;\, 0)$": (150, 0),
+    }
+    for rotulo, (vx, vy) in vertices.items():
+        ax.plot(vx, vy, "ko", markersize=5)
+        ax.annotate(
+            rotulo,
+            (vx, vy),
+            textcoords="offset points",
+            xytext=(7, 5),
+            fontsize=9,
+        )
+
+    # Ponto da produção atual
+    ax.plot(120, 30, "bs", markersize=8, label=r"Atual $(120;\, 30)$ [$Z=\text{R\$\,7.200}$]")
+
+    # Ponto da produção ótima destacado
+    ax.plot(150, 70, "ro", markersize=10, label=r"Ótimo $V_4(150;\, 70)$ [$Z^*=\text{R\$\,10.300}$]")
+
+    # Seta indicando o aumento de lucro (deslocamento ótimo)
+    ax.annotate(
+        "Aumento de Lucro\n(+R$ 3.100,00 ou +43,06%)",
+        xy=(150, 70),
+        xytext=(80, 110),
+        arrowprops=dict(facecolor="crimson", shrink=0.08, width=1.5, headwidth=8),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    ax.set_xlim(0, 180)
+    ax.set_ylim(0, 210)
+    ax.set_xlabel(r"Malas ($x_1$)", fontsize=12)
+    ax.set_ylabel(r"Mochilas ($x_2$)", fontsize=12)
+    ax.set_title(
+        r"Pele Mimosa Ltda. — Análise Gráfica ($\max Z = 50x_1 + 40x_2$)",
+        fontsize=14,
+        pad=15,
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right", framealpha=0.92, fontsize=9)
+
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    plotar_grafico_pele_mimosa()
+
+================================================================================
+ARQUIVO: otimizar_serraria.py
+================================================================================
+
+"""
+Otimização da Produção de Compensados (Serra Serra Serrador)
+Resolução exata via SciPy (HiGHS).
+
+Problema:
+    Max Z = 40*x1 + 30*x2 + 20*x3
+    sujeito a:
+        2*x1 + 5*x2 + 10*x3 <= 900  (Operação I)
+        2*x1 + 5*x2 +  3*x3 <= 400  (Operação II)
+        4*x1 + 2*x2 +  2*x3 <= 600  (Operação III)
+        x1, x2, x3 >= 0
+"""
+
+from scipy.optimize import linprog
+
+
+def resolver_serraria():
+    # Coeficientes da F.O. (linprog minimiza, portanto multiplicamos por -1)
+    c = [-40.0, -30.0, -20.0]
+
+    A_ub = [
+        [2.0, 5.0, 10.0],  # Operação I
+        [2.0, 5.0, 3.0],   # Operação II
+        [4.0, 2.0, 2.0],   # Operação III
+    ]
+    b_ub = [900.0, 400.0, 600.0]
+
+    bounds = [(0.0, None), (0.0, None), (0.0, None)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    if not res.success:
+        raise RuntimeError(f"Erro na otimização: {res.message}")
+
+    return {
+        "x1": float(res.x[0]),
+        "x2": float(res.x[1]),
+        "x3": float(res.x[2]),
+        "lucro_max": float(-res.fun),
+        "folga_op1": float(res.slack[0]),
+        "folga_op2": float(res.slack[1]),
+        "folga_op3": float(res.slack[2]),
+    }
+
+
+if __name__ == "__main__":
+    resultado = resolver_serraria()
+    print("=" * 52)
+    print("    SERRA SERRA SERRADOR — PLANO ÓTIMO DE PRODUÇÃO  ")
+    print("=" * 52)
+    print(f"Placas Tipo A (x1*) : {resultado['x1']:>8.1f} unidades")
+    print(f"Placas Tipo B (x2*) : {resultado['x2']:>8.1f} unidades")
+    print(f"Placas Tipo C (x3*) : {resultado['x3']:>8.1f} unidades")
+    print("-" * 52)
+    print(f"Lucro Máximo Total  : R$ {resultado['lucro_max']:>6.2f}")
+    print("=" * 52)
+    print("            UTILIZAÇÃO DAS OPERAÇÕES (HORAS)        ")
+    print("-" * 52)
+    print(f"Folga Operação I    : {resultado['folga_op1']:>8.1f} h (de 900 h)")
+    print(f"Folga Operação II   : {resultado['folga_op2']:>8.1f} h (de 400 h)")
+    print(f"Folga Operação III  : {resultado['folga_op3']:>8.1f} h (de 600 h)")
+    print("=" * 52)
+
+================================================================================
+ARQUIVO: otimizar_saracura_farmaceutica.py
+================================================================================
+
+"""
+Otimização de Produção de Medicamentos (Saracura Produtos Farmacêuticos)
+Determinação dos pontos extremos e resolução gráfica via SciPy (HiGHS) e Matplotlib.
+
+Problema:
+    Max Z = 5*x1 + 8*x2
+    sujeito a:
+        1*x1 + 4*x2 <= 8   (Matéria-prima A)
+        1*x1 + 1*x2 <= 5   (Matéria-prima B)
+        x1, x2 >= 0
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.optimize import linprog
+
+
+def resolver_saracura():
+    # linprog minimiza: Max Z <=> Min (-Z)
+    c = [-5.0, -8.0]
+
+    A_ub = [
+        [1.0, 4.0],  # Matéria-prima A
+        [1.0, 1.0],  # Matéria-prima B
+    ]
+    b_ub = [8.0, 5.0]
+
+    bounds = [(0.0, None), (0.0, None)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    if not res.success:
+        raise RuntimeError(f"Falha na resolução do modelo: {res.message}")
+
+    return {
+        "analgesico": float(res.x[0]),
+        "antibiotico": float(res.x[1]),
+        "receita_max": float(-res.fun),
+    }
+
+
+def plotar_grafico(solucao):
+    x1_opt = solucao["analgesico"]
+    x2_opt = solucao["antibiotico"]
+    z_opt = solucao["receita_max"]
+
+    # Malha para o plano cartesiano (em toneladas)
+    x1_vals = np.linspace(0, 9, 1000)
+    x2_vals = np.linspace(0, 6, 1000)
+    X1, X2 = np.meshgrid(x1_vals, x2_vals)
+
+    # Fronteiras isolando x2:
+    # Reta A: 1*x1 + 4*x2 = 8 => x2 = (8 - x1)/4 = 2 - 0.25*x1
+    r_mat_a = (8.0 - x1_vals) / 4.0
+
+    # Reta B: 1*x1 + 1*x2 = 5 => x2 = 5 - x1
+    r_mat_b = 5.0 - x1_vals
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    # Curvas de restrição
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_mat_a),
+        label=r"Matéria-prima A: $x_1 + 4x_2 \leq 8$ t",
+        color="royalblue",
+        linewidth=2,
+    )
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_mat_b),
+        label=r"Matéria-prima B: $x_1 + x_2 \leq 5$ t",
+        color="darkorange",
+        linewidth=2,
+    )
+
+    # Região factível (área sombreada)
+    regiao_factivel = (
+        (X1 + 4.0 * X2 <= 8.0)
+        & (X1 + X2 <= 5.0)
+        & (X1 >= 0)
+        & (X2 >= 0)
+    )
+
+    ax.imshow(
+        regiao_factivel.astype(int),
+        extent=(0, 9, 0, 6),
+        origin="lower",
+        cmap="Greens",
+        alpha=0.25,
+    )
+
+    # Retas da Função-Objetivo (Isoreceita: 5x1 + 8x2 = Z => x2 = - (5/8)x1 + Z/8)
+    # 1. Reta intermediária
+    z_inter = 16.0
+    ax.plot(
+        x1_vals,
+        -(5.0 / 8.0) * x1_vals + z_inter / 8.0,
+        color="crimson",
+        linestyle=":",
+        alpha=0.6,
+        label=rf"F.O. $Z = \text{{R\$\,}}{z_inter:.2f}$",
+    )
+
+    # 2. Reta no ponto ótimo (último contato com a região factível)
+    ax.plot(
+        x1_vals,
+        -(5.0 / 8.0) * x1_vals + z_opt / 8.0,
+        color="crimson",
+        linewidth=2.5,
+        label=rf"F.O. Ótima $Z^* = \text{{R\$\,}}{z_opt:.2f}$",
+    )
+
+    # Vértices (Pontos Extremos)
+    vertices = {
+        r"$V_1(0; 0)$": (0.0, 0.0),
+        r"$V_2(0; 2)$": (0.0, 2.0),
+        r"$V_4(5; 0)$": (5.0, 0.0),
+    }
+
+    for rotulo, (vx, vy) in vertices.items():
+        z_v = 5.0 * vx + 8.0 * vy
+        ax.plot(vx, vy, "ko", markersize=6)
+        ax.annotate(
+            f"{rotulo}\n[Z = R$ {z_v:.0f}]",
+            (vx, vy),
+            textcoords="offset points",
+            xytext=(10, 5),
+            fontsize=9,
+        )
+
+    # Ponto ótimo destacado
+    ax.plot(
+        x1_opt,
+        x2_opt,
+        "ro",
+        markersize=10,
+        label=rf"Ótimo $V_3({x1_opt:.0f};\, {x2_opt:.0f})$ [$Z^*=\text{{R\$\,}}{z_opt:.2f}$]",
+    )
+    ax.annotate(
+        f"$V_3(4; 1)$ - ÓTIMO\n[Z = R$ {z_opt:.0f}]",
+        (x1_opt, x2_opt),
+        textcoords="offset points",
+        xytext=(10, 10),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    # Vetor de direção de crescimento da receita (Gradiente = [5, 8])
+    ax.annotate(
+        "Sentido de Maximização (Crescimento de Z)",
+        xy=(x1_opt, x2_opt),
+        xytext=(x1_opt + 1.5, x2_opt + 2.0),
+        arrowprops=dict(
+            facecolor="crimson", shrink=0.08, width=1.5, headwidth=8
+        ),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    ax.set_xlim(0, 8.5)
+    ax.set_ylim(0, 5.5)
+    ax.set_xlabel(r"Analgésico ($x_1$) [toneladas]", fontsize=12)
+    ax.set_ylabel(r"Antibiótico ($x_2$) [toneladas]", fontsize=12)
+    ax.set_title(
+        r"Indústrias Saracura — Maximização da Receita ($\max Z = 5x_1 + 8x_2$)",
+        fontsize=13,
+        pad=15,
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right", framealpha=0.92, fontsize=9)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    sol = resolver_saracura()
+    print("=" * 52)
+    print("   SARACURA PRODUTOS FARMACÊUTICOS — PLANO ÓTIMO    ")
+    print("=" * 52)
+    print(f"Analgésico a produzir (x1*) : {sol['analgesico']:.1f} toneladas")
+    print(f"Antibiótico a produzir (x2*): {sol['antibiotico']:.1f} toneladas")
+    print("-" * 52)
+    print(f"Receita Máxima Diária (Z*)  : R$ {sol['receita_max']:,.2f}")
+    print("=" * 52)
+
+    plotar_grafico(sol)
+
+================================================================================
+ARQUIVO: otimizar_bebida_energetica.py
+================================================================================
+
+"""
+Otimização da Bebida Energética (Have Fun S.A.)
+Minimização de custo por lata via SciPy (HiGHS) e plotagem gráfica.
+
+Problema:
+    Min Z = 0.06*x1 + 0.08*x2
+    sujeito a:
+        8*x1 + 6*x2 >= 48   (Extrato de Guaraná mín.)
+        1*x1 + 2*x2 >= 12   (Cafeína mín.)
+        1*x1 + 2*x2 <= 20   (Cafeína máx.)
+        x1, x2 >= 0
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.optimize import linprog
+
+
+def resolver_energetico():
+    # Coeficientes de custo (Minimização padrão no linprog)
+    c = [0.06, 0.08]
+
+    # Convertendo as restrições (>=) para (<=) multiplicando por -1
+    A_ub = [
+        [-8.0, -6.0],  # -8x1 - 6x2 <= -48  (Guaraná mín.)
+        [-1.0, -2.0],  # -1x1 - 2x2 <= -12  (Cafeína mín.)
+        [1.0, 2.0],  #  1x1 + 2x2 <=  20  (Cafeína máx.)
+    ]
+    b_ub = [-48.0, -12.0, 20.0]
+
+    bounds = [(0.0, None), (0.0, None)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    if not res.success:
+        raise RuntimeError(f"Falha na convergência do solver: {res.message}")
+
+    return {
+        "x1": float(res.x[0]),
+        "x2": float(res.x[1]),
+        "custo_min": float(res.fun),
+    }
+
+
+def plotar_grafico(solucao):
+    x1_opt = solucao["x1"]
+    x2_opt = solucao["x2"]
+    z_opt = solucao["custo_min"]
+
+    # Malha para o plano cartesiano
+    x1_vals = np.linspace(0, 24, 1000)
+    x2_vals = np.linspace(0, 14, 1000)
+    X1, X2 = np.meshgrid(x1_vals, x2_vals)
+
+    # Fronteiras isolando x2:
+    # R1: 8x1 + 6x2 = 48  => x2 = (48 - 8x1)/6 = 8 - (4/3)x1
+    r_guarana = (48.0 - 8.0 * x1_vals) / 6.0
+
+    # R2: x1 + 2x2 = 12   => x2 = (12 - x1)/2 = 6 - 0.5x1
+    r_caf_min = (12.0 - x1_vals) / 2.0
+
+    # R3: x1 + 2x2 = 20   => x2 = (20 - x1)/2 = 10 - 0.5x1
+    r_caf_max = (20.0 - x1_vals) / 2.0
+
+    fig, ax = plt.subplots(figsize=(11, 7))
+
+    # Curvas de restrição
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_guarana),
+        label=r"Guaraná Mín.: $8x_1 + 6x_2 \geq 48$",
+        color="royalblue",
+        linewidth=2,
+    )
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_caf_min),
+        label=r"Cafeína Mín.: $x_1 + 2x_2 \geq 12$",
+        color="darkorange",
+        linewidth=2,
+    )
+    ax.plot(
+        x1_vals,
+        np.maximum(0, r_caf_max),
+        label=r"Cafeína Máx.: $x_1 + 2x_2 \leq 20$",
+        color="forestgreen",
+        linewidth=2,
+        linestyle="-.",
+    )
+
+    # Região factível
+    regiao_factivel = (
+        (8.0 * X1 + 6.0 * X2 >= 48.0)
+        & (1.0 * X1 + 2.0 * X2 >= 12.0)
+        & (1.0 * X1 + 2.0 * X2 <= 20.0)
+        & (X1 >= 0)
+        & (X2 >= 0)
+    )
+
+    ax.imshow(
+        regiao_factivel.astype(int),
+        extent=(0, 24, 0, 14),
+        origin="lower",
+        cmap="Blues",
+        alpha=0.25,
+    )
+
+    # Retas da Função-Objetivo (Isocusto): 0.06x1 + 0.08x2 = Z => x2 = -0.75x1 + Z/0.08
+    # 1. Reta com Z maior (sub-ótima)
+    z_sub = 0.80
+    ax.plot(
+        x1_vals,
+        -0.75 * x1_vals + z_sub / 0.08,
+        color="crimson",
+        linestyle="--",
+        alpha=0.6,
+        label=rf"F.O. $Z = \text{{R\$\,}}{z_sub:.2f}$ (Sub-ótima)",
+    )
+
+    # 2. Reta no ponto ótimo
+    ax.plot(
+        x1_vals,
+        -0.75 * x1_vals + z_opt / 0.08,
+        color="crimson",
+        linewidth=2.5,
+        label=rf"F.O. Ótima $Z^* = \text{{R\$\,}}{z_opt:.3f}$",
+    )
+
+    # Vértices do pentágono factível
+    vertices = {
+        r"$E(0; 8)$": (0.0, 8.0),
+        r"$D(0; 10)$": (0.0, 10.0),
+        r"$B(12; 0)$": (12.0, 0.0),
+        r"$C(20; 0)$": (20.0, 0.0),
+    }
+    for rotulo, (vx, vy) in vertices.items():
+        ax.plot(vx, vy, "ko", markersize=5)
+        ax.annotate(
+            rotulo,
+            (vx, vy),
+            textcoords="offset points",
+            xytext=(7, 5),
+            fontsize=9,
+        )
+
+    # Vértice ótimo destacado
+    ax.plot(
+        x1_opt,
+        x2_opt,
+        "ro",
+        markersize=9,
+        label=rf"Ótimo $A({x1_opt:.1f}; {x2_opt:.1f})$ [$Z^*={z_opt:.3f}$]",
+    )
+
+    # Vetor indicando a direção de minimização
+    ax.annotate(
+        "Sentido de Minimização (em direção à origem)",
+        xy=(2.4, 4.8),
+        xytext=(8.0, 8.5),
+        arrowprops=dict(
+            facecolor="crimson", shrink=0.08, width=1.5, headwidth=8
+        ),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    ax.set_xlim(0, 22)
+    ax.set_ylim(0, 12)
+    ax.set_xlabel(r"Doses de Solução Red ($x_1$)", fontsize=12)
+    ax.set_ylabel(r"Doses de Solução Blue ($x_2$)", fontsize=12)
+    ax.set_title(
+        r"Have Fun S.A. — Otimização da Composição do Energético ($\min Z = 0{,}06x_1 + 0{,}08x_2$)",
+        fontsize=13,
+        pad=15,
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right", framealpha=0.9, fontsize=9)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    resultado = resolver_energetico()
+    print("=" * 45)
+    print("      HAVE FUN S.A. — RESULTADO ÓTIMO        ")
+    print("=" * 45)
+    print(
+        f"Doses Solução Red  (x1*) : {resultado['x1']:.2f} doses ({resultado['x1']*10:.1f} ml)"
+    )
+    print(
+        f"Doses Solução Blue (x2*) : {resultado['x2']:.2f} doses ({resultado['x2']*10:.1f} ml)"
+    )
+    print(f"Custo Mínimo/Lata  (Z*)  : R$ {resultado['custo_min']:.4f}")
+    print("=" * 45)
+
+    plotar_grafico(resultado)
+
+================================================================================
+ARQUIVO: otimizador_picole.py
+================================================================================
+
+"""
+Otimização da Produção de Picolés (Picolé Lelé Ltda.)
+Resolução exata via Programação Linear com SciPy (HiGHS).
+
+Problema:
+    Max Z = 1.00*x1 + 0.90*x2 + 0.95*x3
+    sujeito a:
+        0.45*x1 + 0.50*x2 + 0.40*x3 <= 200  (Leite)
+        0.50*x1 + 0.40*x2 + 0.40*x3 <= 150  (Açúcar)
+        0.10*x1 + 0.15*x2 + 0.20*x3 <= 60   (Polpa de fruta)
+        x1, x2, x3 >= 0
+"""
+
+from scipy.optimize import linprog
+
+
+def resolver_picole_lele():
+    # Max Z <=> Min -Z
+    c = [-1.00, -0.90, -0.95]
+
+    A_ub = [
+        [0.45, 0.50, 0.40],  # Leite
+        [0.50, 0.40, 0.40],  # Açúcar
+        [0.10, 0.15, 0.20],  # Polpa
+    ]
+    b_ub = [200.0, 150.0, 60.0]
+
+    bounds = [(0.0, None), (0.0, None), (0.0, None)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    if not res.success:
+        raise RuntimeError(f"Erro na otimização: {res.message}")
+
+    x1, x2, x3 = [float(val) for val in res.x]
+    lucro_max = float(-res.fun)
+    folgas = [float(s) for s in res.slack]
+
+    return {
+        "morango": x1,
+        "uva": x2,
+        "limao": x3,
+        "lucro_max": lucro_max,
+        "folga_leite": folgas[0],
+        "folga_acucar": folgas[1],
+        "folga_polpa": folgas[2],
+    }
+
+
+if __name__ == "__main__":
+    resultado = resolver_picole_lele()
+    print("=" * 52)
+    print("      PICOLÉ LELÉ LTDA. — PROGRAMAÇÃO DE PRODUÇÃO   ")
+    print("=" * 52)
+    print(f"Picolés de Morango (x1*) : {resultado['morango']:>8.0f} unidades")
+    print(f"Picolés de Uva     (x2*) : {resultado['uva']:>8.0f} unidades")
+    print(f"Picolés de Limão   (x3*) : {resultado['limao']:>8.0f} unidades")
+    print("-" * 52)
+    print(f"Lucro Máximo Total (Z*)  : R$ {resultado['lucro_max']:>6.2f}")
+    print("=" * 52)
+    print("             USO DE RECURSOS E FOLGAS               ")
+    print("-" * 52)
+    print(f"Sobra de Leite           : {resultado['folga_leite']:>8.1f} litros")
+    print(f"Sobra de Açúcar          : {resultado['folga_acucar']:>8.1f} unidades (100g)")
+    print(f"Sobra de Polpa           : {resultado['folga_polpa']:>8.1f} litros")
+    print("=" * 52)
+
+================================================================================
+ARQUIVO: otimizar_transporte_cargas.py
+================================================================================
+
+"""
+Otimização de Transporte de Cargas (Deixa Comigo S.A.)
+Maximização de lucro via SciPy (HiGHS) e plotagem gráfica da região viável.
+
+Problema:
+    Max Z = 0.12*x1 + 0.35*x2
+    sujeito a:
+        x1 + x2 <= 70.000             (Capacidade de Peso em kg)
+        0.4*x1 + 0.2*x2 <= 30.000     (Capacidade de Volume em m³)
+        x1 <= 100.000                 (Demanda/Disponibilidade de Sementes)
+        x2 <= 85.000                  (Demanda/Disponibilidade de Grãos)
+        x1, x2 >= 0
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.optimize import linprog
+
+
+def resolver_transporte():
+    # Max Z <=> Min (-Z) no linprog
+    c = [-0.12, -0.35]
+
+    # Matriz das inequações (A_ub @ x <= b_ub)
+    A_ub = [
+        [1.0, 1.0],  # Peso
+        [0.4, 0.2],  # Volume
+    ]
+    b_ub = [70000.0, 30000.0]
+
+    # Limites individuais das variáveis (não-negatividade e demanda máxima)
+    bounds = [(0.0, 100000.0), (0.0, 85000.0)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    if not res.success:
+        raise RuntimeError(f"Falha na convergência do solver: {res.message}")
+
+    return {
+        "x1": float(res.x[0]),
+        "x2": float(res.x[1]),
+        "lucro_max": float(-res.fun),
+    }
+
+
+def plotar_grafico(solucao):
+    x1_opt = solucao["x1"]
+    x2_opt = solucao["x2"]
+    z_opt = solucao["lucro_max"]
+
+    # Malha para o plano cartesiano (em milhares de kg)
+    x1_vals = np.linspace(0, 110000, 1000)
+    x2_vals = np.linspace(0, 100000, 1000)
+    X1, X2 = np.meshgrid(x1_vals, x2_vals)
+
+    # Fronteiras isolando x2:
+    # 1. Peso: x1 + x2 = 70.000 => x2 = 70.000 - x1
+    r_peso = 70000.0 - x1_vals
+
+    # 2. Volume: 0.4*x1 + 0.2*x2 = 30.000 => x2 = (30.000 - 0.4*x1) / 0.2 = 150.000 - 2*x1
+    r_volume = (30000.0 - 0.4 * x1_vals) / 0.2
+
+    fig, ax = plt.subplots(figsize=(11, 7))
+
+    # Plot das retas de restrição
+    ax.plot(
+        x1_vals / 1000,
+        np.maximum(0, r_peso) / 1000,
+        label=r"Peso: $x_1 + x_2 \leq 70.000$ kg (Ativa)",
+        color="royalblue",
+        linewidth=2.2,
+    )
+    ax.plot(
+        x1_vals / 1000,
+        np.maximum(0, r_volume) / 1000,
+        label=r"Volume: $0{,}4x_1 + 0{,}2x_2 \leq 30.000$ $\text{m}^3$ (Redundante)",
+        color="gray",
+        linestyle="--",
+        linewidth=1.8,
+    )
+    ax.axvline(
+        100,
+        color="tab:purple",
+        linestyle=":",
+        linewidth=1.5,
+        label=r"Demanda Sementes: $x_1 \leq 100.000$ kg",
+    )
+    ax.axhline(
+        85,
+        color="tab:orange",
+        linestyle=":",
+        linewidth=1.5,
+        label=r"Demanda Grãos: $x_2 \leq 85.000$ kg",
+    )
+
+    # Região factível
+    regiao_factivel = (
+        (X1 + X2 <= 70000.0)
+        & (0.4 * X1 + 0.2 * X2 <= 30000.0)
+        & (X1 <= 100000.0)
+        & (X2 <= 85000.0)
+        & (X1 >= 0)
+        & (X2 >= 0)
+    )
+
+    ax.imshow(
+        regiao_factivel.astype(int),
+        extent=(0, 110, 0, 100),
+        origin="lower",
+        cmap="Greens",
+        alpha=0.25,
+    )
+
+    # Retas da Função-Objetivo (Isolucro: 0.12*x1 + 0.35*x2 = Z => x2 = -(12/35)*x1 + Z/0.35)
+    # 1. Reta intermediária
+    z_inter = 12000.0
+    ax.plot(
+        x1_vals / 1000,
+        (-(0.12 / 0.35) * x1_vals + z_inter / 0.35) / 1000,
+        color="crimson",
+        linestyle=":",
+        alpha=0.6,
+        label=rf"F.O. $Z = \text{{R\$\,}}{z_inter:,.0f}$",
+    )
+
+    # 2. Reta no ponto ótimo (último contato antes de sair da região viável)
+    ax.plot(
+        x1_vals / 1000,
+        (-(0.12 / 0.35) * x1_vals + z_opt / 0.35) / 1000,
+        color="crimson",
+        linewidth=2.5,
+        label=rf"F.O. Ótima $Z^* = \text{{R\$\,}}{z_opt:,.2f}$",
+    )
+
+    # Vértices da região viável
+    ax.plot(0, 0, "ko", markersize=5)
+    ax.plot(70, 0, "ko", markersize=6, label=r"Vértice $(70.000;\, 0)$ [$Z = \text{R\$\,8.400}$]")
+
+    # Ponto ótimo destacado
+    ax.plot(
+        x1_opt / 1000,
+        x2_opt / 1000,
+        "ro",
+        markersize=9,
+        label=rf"Ótimo $({x1_opt:,.0f};\, {x2_opt:,.0f})$ [$Z^* = \text{{R\$\,}}{z_opt:,.2f}$]",
+    )
+
+    # Vetor indicando a direção de maximização
+    ax.annotate(
+        "Sentido de Maximização (Crescimento de Z)",
+        xy=(0, 70),
+        xytext=(20, 85),
+        arrowprops=dict(
+            facecolor="crimson", shrink=0.08, width=1.5, headwidth=8
+        ),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    ax.set_xlim(0, 110)
+    ax.set_ylim(0, 100)
+    ax.set_xlabel(r"Sementes ($x_1$) [milhares de kg]", fontsize=12)
+    ax.set_ylabel(r"Grãos ($x_2$) [milhares de kg]", fontsize=12)
+    ax.set_title(
+        r"Deixa Comigo S.A. — Maximização de Lucro no Transporte ($\max Z = 0{,}12x_1 + 0{,}35x_2$)",
+        fontsize=13,
+        pad=15,
+    )
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(loc="upper right", framealpha=0.9, fontsize=9)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    resultado = resolver_transporte()
+    print("=" * 48)
+    print("      DEIXA COMIGO S.A. — RESULTADO ÓTIMO       ")
+    print("=" * 48)
+    print(f"Carga de Sementes (x1*) : {resultado['x1']:>10,.2f} kg")
+    print(f"Carga de Grãos    (x2*) : {resultado['x2']:>10,.2f} kg")
+    print(f"Lucro Máximo      (Z*)  : R$ {resultado['lucro_max']:>10,.2f}")
+    print("=" * 48)
+
+    plotar_grafico(resultado)
+
+================================================================================
+ARQUIVO: planejamento_producao_custo_minimo.py
+================================================================================
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.optimize import linprog
+
+
+def resolver_alumilaminas():
+    # Custos em milhares de R$ para evitar instabilidade numérica
+    c = [100.0, 200.0]
+
+    # Restrições de demanda (>= convertidas para <= via multiplicação por -1)
+    A_ub = [
+        [-8.0, -2.0],  # Finas:  -8x1 - 2x2 <= -16
+        [-1.0, -1.0],  # Médias: -1x1 - 1x2 <= -6
+        [-2.0, -7.0],  # Grossas: -2x1 - 7x2 <= -28
+    ]
+    b_ub = [-16.0, -6.0, -28.0]
+    bounds = [(0.0, None), (0.0, None)]
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    return {
+        "x1": res.x[0],
+        "x2": res.x[1],
+        "custo_total": res.fun * 1000,  # Converte de volta para R$
+    }
+
+
+def plotar_grafico(solucao):
+    x1_opt = solucao["x1"]
+    x2_opt = solucao["x2"]
+    z_min_milhar = solucao["custo_total"] / 1000
+
+    # Malha de pontos
+    x1 = np.linspace(0, 16, 1000)
+    x2 = np.linspace(0, 10, 1000)
+    X1, X2 = np.meshgrid(x1, x2)
+
+    # Equações das fronteiras (isolando x2)
+    # Finas:  8x1 + 2x2 >= 16 => x2 >= 8 - 4x1
+    r_finas = 8 - 4 * x1
+    # Médias: x1 + x2 >= 6     => x2 >= 6 - x1
+    r_medias = 6 - x1
+    # Grossas: 2x1 + 7x2 >= 28 => x2 >= (28 - 2x1)/7
+    r_grossas = (28 - 2 * x1) / 7
+
+    plt.figure(figsize=(11, 7))
+
+    # Linhas de restrição
+    plt.plot(
+        x1,
+        np.maximum(0, r_finas),
+        label=r"Finas: $8x_1 + 2x_2 \geq 16$",
+        color="royalblue",
+        linewidth=2,
+    )
+    plt.plot(
+        x1,
+        np.maximum(0, r_medias),
+        label=r"Médias: $x_1 + x_2 \geq 6$",
+        color="darkorange",
+        linewidth=2,
+    )
+    plt.plot(
+        x1,
+        np.maximum(0, r_grossas),
+        label=r"Grossas: $2x_1 + 7x_2 \geq 28$",
+        color="forestgreen",
+        linewidth=2,
+    )
+
+    # Região viável conjunta
+    factivel = (
+        (8 * X1 + 2 * X2 >= 16)
+        & (X1 + X2 >= 6)
+        & (2 * X1 + 7 * X2 >= 28)
+        & (X1 >= 0)
+        & (X2 >= 0)
+    )
+
+    plt.imshow(
+        factivel.astype(int),
+        extent=(0, 16, 0, 10),
+        origin="lower",
+        cmap="Blues",
+        alpha=0.2,
+    )
+
+    # Retas da Função-Objetivo (Isocusto: x2 = -0.5*x1 + Z/200)
+    # Reta com custo mais alto
+    plt.plot(
+        x1,
+        -0.5 * x1 + 1400 / 200,
+        "crimson",
+        linestyle="--",
+        alpha=0.6,
+        label=r"F.O. Sub-ótima ($Z = \text{R\$\,1.400.000}$)",
+    )
+    # Reta no ponto ótimo
+    plt.plot(
+        x1,
+        -0.5 * x1 + z_min_milhar / 200,
+        "crimson",
+        linewidth=2.5,
+        label=rf"F.O. Ótima ($Z^* = \text{{R\$\,}}{solucao['custo_total']:,.2f}$)",
+    )
+
+    # Vértices da fronteira
+    vertices = {
+        r"$V_1(0; 8)$": (0, 8),
+        r"$V_2(0.67; 5.33)$": (2 / 3, 16 / 3),
+        r"$V_4(14; 0)$": (14, 0),
+    }
+    for label, (vx, vy) in vertices.items():
+        plt.plot(vx, vy, "ko", markersize=6)
+        plt.annotate(
+            label,
+            (vx, vy),
+            textcoords="offset points",
+            xytext=(10, 5),
+            fontsize=9,
+        )
+
+    # Ponto ótimo destacado
+    plt.plot(
+        x1_opt,
+        x2_opt,
+        "ro",
+        markersize=9,
+        label=rf"Ótimo $V_3({x1_opt:.1f}; {x2_opt:.1f})$",
+    )
+
+    # Seta indicando o sentido de minimização
+    plt.annotate(
+        "Sentido de Minimização (menor custo)",
+        xy=(2.8, 3.2),
+        xytext=(6.5, 6.0),
+        arrowprops=dict(
+            facecolor="crimson", shrink=0.08, width=1.5, headwidth=8
+        ),
+        fontsize=10,
+        fontweight="bold",
+        color="darkred",
+    )
+
+    plt.xlim(0, 15)
+    plt.ylim(0, 9)
+    plt.xlabel(r"Dias em São Paulo ($x_1$)", fontsize=12)
+    plt.ylabel(r"Dias no Rio de Janeiro ($x_2$)", fontsize=12)
+    plt.title(
+        "Alumilâminas S.A. — Otimização de Custos de Produção",
+        fontsize=14,
+        pad=15,
+    )
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.legend(loc="upper right", framealpha=0.9, fontsize=9)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    solucao = resolver_alumilaminas()
+    print("=" * 50)
+    print("       RESULTADO — ALUMILÂMINAS S.A.       ")
+    print("=" * 50)
+    print(f"Dias de operação em São Paulo (x1*) : {solucao['x1']:.2f} dias")
+    print(f"Dias de operação no Rio de Jan. (x2*) : {solucao['x2']:.2f} dias")
+    print(f"Custo Mínimo Total (Z*)              : R$ {solucao['custo_total']:,.2f}")
+    print("=" * 50)
+
+    plotar_grafico(solucao)
+
